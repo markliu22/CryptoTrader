@@ -16,11 +16,16 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SignatureException;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.Formatter;
-import java.util.List;
+import java.util.*;
 
 public class App {
+    // keep variables private, interest with them through public getters and setters
+    // constants
+    private static final String CB_ACCESS_SIGN = "CB-ACCESS-SIGN";
+    private static final String CB_ACCESS_TIMESTAMP = "CB-ACCESS-TIMESTAMP";
+    private static final String CB_ACCESS_KEY = "CB-ACCESS-KEY";
+    private static final String CB_ACCESS_PASSPHRASE = "CB-ACCESS-PASSPHRASE";
+
     private static String BASE_URL;
     private static String API_KEY;
     private static String SECRET_KEY;
@@ -45,7 +50,45 @@ public class App {
         }
     }
 
-    public static void main(String[] args) throws IOException, InterruptedException {
+    // TODO: place order method
+    public static void buyCoin(HttpClient client, String coinName) {
+        // must have enough usd in their account
+        // https://docs.pro.coinbase.com/#place-a-new-order
+    }
+
+    // TODO: sell method
+    public static void sellCoin(HttpClient client, String coinName) {
+        // https://docs.pro.coinbase.com/#create-conversion
+        // convert to usd
+    }
+
+    // TODO: check out coin price method
+    public static void getCoinPrice(HttpClient client, String coinName) {
+        // TODO
+    }
+
+    // response contains a bunch of accounts, 1 for each coin
+    public static HttpResponse<String> getAllAccounts(HttpClient client) throws IOException, InterruptedException {
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/accounts";
+        String METHOD = "GET";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .GET()
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + "accounts"))
+                .build();
+        // response.body() contains a list of accounts, 1 for each coin
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
+    }
+
+    // start bot method
+    public static void startProcess() throws IOException, InterruptedException {
         // auto import: https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
         // get env vars from: https://github.com/cdimascio/dotenv-java
         Dotenv dotenv = Dotenv.load();
@@ -54,46 +97,52 @@ public class App {
         SECRET_KEY = dotenv.get("SECRET_KEY");
         PASSPHRASE = dotenv.get("PASSPHRASE");
 
-        // Get CB_ACCESS_SIGN
-        String CB_ACCESS_TIMESTAMP = Instant.now().getEpochSecond() + "";
-        String REQUEST_PATH = "/accounts";
-        String METHOD = "GET";
-        String CB_ACCESS_SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", CB_ACCESS_TIMESTAMP);
-
         // Now can create request
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .setHeader("CB-ACCESS-SIGN", CB_ACCESS_SIGN)
-                .setHeader("CB-ACCESS-TIMESTAMP", CB_ACCESS_TIMESTAMP)
-                .setHeader("CB-ACCESS-KEY", API_KEY)
-                .setHeader("CB-ACCESS-PASSPHRASE", PASSPHRASE)
-                .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + "accounts"))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println(response.body());
-        // will print a bunch of accounts because there will be 1 account per currency (BTC account, ETH account..)
+        HttpResponse<String> res = getAllAccounts(client);
+        System.out.println(res.body());
+
+        // enter num coins you're watching
+        Scanner sc = new Scanner(System.in);
+        System.out.println("Number of coins to watch:");
+        int numCoins = sc.nextInt();
+        sc.nextLine();
+        Coin[] coins = new Coin[numCoins];
+
+        for(int i = 0; i < numCoins; i++) {
+            System.out.println("Name of coin " + (i + 1) + ") ($):");
+            String name = sc.nextLine();
+
+            System.out.println("Target price to sell coin " + (i + 1) + ") ($):");
+            double sellPrice = sc.nextDouble();
+
+            System.out.println("Target price to buy coin " + (i + 1) + ") ($):");
+            double buyPrice = sc.nextDouble();
+
+            System.out.println("Maximum amount of coin " + (i + 1) + ") to sell at a time  ($):");
+            double maxBuyAmount = sc.nextDouble();
+
+            System.out.println("Maximum amount of coin " + (i + 1) + ") to buy at a time ($):");
+            double maxSellAmount = sc.nextDouble();
+
+            Coin currCoin = new Coin(name, sellPrice, buyPrice, maxBuyAmount, maxSellAmount);
+            coins[i] = currCoin;
+            System.out.println(currCoin.getName() + " added.");
+            sc.nextLine();
+        }
+
+        // TODO: ask about risk tolerance
+
+
+
+        // while true
+            // for each Coin
+                // check price of coin:
+                    // if we own some of this coin && price > sellPrice: sell
+                    // if price < buyPrice: buy
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        startProcess();
     }
 }
-
-
-/*
-Test Http GET
-Get an instance of the http client
-https://www.youtube.com/watch?v=5MmlRZZxTqk&ab_channel=DanVega
-HttpClient client = HttpClient.newHttpClient();
-HttpRequest request = HttpRequest.newBuilder()
-        .GET()
-        .header("accept", "application/json")
-        .setHeader("CB-ACCESS-KEY", "application/json")
-        .uri(URI.create(URL))
-        .build();
-return type is HttpResponse<String>
-HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
- System.out.println(response.body());
- parse JSON into objects using jackson
-ObjectMapper mapper = new ObjectMapper();
-List<Post> posts = mapper.readValue(response.body(), new TypeReference<List<Post>>() {});
-posts.forEach(System.out::println);
-* */
