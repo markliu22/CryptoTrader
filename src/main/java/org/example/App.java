@@ -63,8 +63,26 @@ public class App {
     }
 
     // TODO: check out coin price method
-    public static void getCoinPrice(HttpClient client, String coinName) {
-        // TODO
+    // https://docs.pro.coinbase.com/#get-historic-rates
+    public static HttpResponse<String> getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        // must be one of {60, 300, 900, 3600, 21600, 86400}
+        int granularity = 300;
+        String REQUEST_PATH = "/products/" + coinTicker + "/candles?granularity=" + granularity;
+        String METHOD = "GET";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .GET()
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        // response.body() contains a list of accounts, 1 for each coin
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
     }
 
     // response contains a bunch of accounts, 1 for each coin
@@ -80,7 +98,7 @@ public class App {
                 .setHeader(CB_ACCESS_KEY, API_KEY)
                 .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
                 .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + "accounts"))
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
                 .build();
         // response.body() contains a list of accounts, 1 for each coin
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -96,11 +114,7 @@ public class App {
         API_KEY = dotenv.get("API_KEY");
         SECRET_KEY = dotenv.get("SECRET_KEY");
         PASSPHRASE = dotenv.get("PASSPHRASE");
-
-        // Now can create request
         HttpClient client = HttpClient.newHttpClient();
-        HttpResponse<String> res = getAllAccounts(client);
-        System.out.println(res.body());
 
         // enter num coins you're watching
         Scanner sc = new Scanner(System.in);
@@ -110,7 +124,8 @@ public class App {
         Coin[] coins = new Coin[numCoins];
 
         for(int i = 0; i < numCoins; i++) {
-            System.out.println("Name of coin " + (i + 1) + ") ($):");
+            // Ex: BTC-USD
+            System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
 
             System.out.println("Target price to sell coin " + (i + 1) + ") ($):");
@@ -130,16 +145,12 @@ public class App {
             System.out.println(currCoin.getName() + " added.");
             sc.nextLine();
         }
-
         // TODO: ask about risk tolerance
 
-
-
-        // while true
-            // for each Coin
-                // check price of coin:
-                    // if we own some of this coin && price > sellPrice: sell
-                    // if price < buyPrice: buy
+        // for each Coin
+            // check price of coin:
+                // buy / sell if ...
+            // sleep for like 10-ish mins
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
