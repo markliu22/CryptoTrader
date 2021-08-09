@@ -3,6 +3,8 @@ package org.example;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.cdimascio.dotenv.Dotenv;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -19,8 +21,8 @@ import java.time.Instant;
 import java.util.*;
 
 public class App {
-    // keep variables private, interest with them through public getters and setters
-    // constants
+    // keep variables private, interact with them through public getters and setters
+    // constants:
     private static final String CB_ACCESS_SIGN = "CB-ACCESS-SIGN";
     private static final String CB_ACCESS_TIMESTAMP = "CB-ACCESS-TIMESTAMP";
     private static final String CB_ACCESS_KEY = "CB-ACCESS-KEY";
@@ -30,6 +32,15 @@ public class App {
     private static String API_KEY;
     private static String SECRET_KEY;
     private static String PASSPHRASE;
+
+    // response.body() after getting prices is a json array of json arrays
+    public static Double parsePrices(String responseBody) {
+        JSONArray arr = new JSONArray(responseBody);
+        JSONArray mostRecent = arr.getJSONArray(0);
+        double open = mostRecent.getDouble(1);
+        double close = mostRecent.getDouble(2);
+        return (open + close) / 2;
+    }
 
     // old decode was wrong, correct version: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
     public static String generateSignedHeader(String requestPath, String method, String body, String timestamp) {
@@ -64,10 +75,11 @@ public class App {
 
     // TODO: check out coin price method
     // https://docs.pro.coinbase.com/#get-historic-rates
-    public static HttpResponse<String> getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
+    public static Double getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         // must be one of {60, 300, 900, 3600, 21600, 86400}
-        int granularity = 300;
+        int granularity = 60; // get most recent
+        // "if data points are readily available, your response may contain as many as 300 candles and some of those candles may precede your declared start value"
         String REQUEST_PATH = "/products/" + coinTicker + "/candles?granularity=" + granularity;
         String METHOD = "GET";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
@@ -82,7 +94,9 @@ public class App {
                 .build();
         // response.body() contains a list of accounts, 1 for each coin
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return response;
+        // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
+        return parsePrices(response.body());
+        // TODO: find a way to analyze these recent prices?
     }
 
     // response contains a bunch of accounts, 1 for each coin
@@ -146,7 +160,7 @@ public class App {
             sc.nextLine();
         }
         // TODO: ask about risk tolerance
-
+        getCoinPrice(client, "BTC-USD");
         // for each Coin
             // check price of coin:
                 // buy / sell if ...
