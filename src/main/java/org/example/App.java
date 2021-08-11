@@ -62,15 +62,38 @@ public class App {
     }
 
     // TODO: place order method
-    public static void buyCoin(HttpClient client, String coinName) {
+//    public static void buyCoin(HttpClient client, String coinName) {
         // must have enough usd in their account
         // https://docs.pro.coinbase.com/#place-a-new-order
-    }
+//    }
+
 
     // TODO: sell method
-    public static void sellCoin(HttpClient client, String coinName) {
+    public static HttpResponse<String> sellCoin(HttpClient client, String coinName) throws IOException, InterruptedException {
         // https://docs.pro.coinbase.com/#create-conversion
         // convert to usd
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("from", "UNI"); // "BTC" is currency id, not "BTC-USD"
+        requestBody.put("to", "USD");
+        requestBody.put("amount", "1"); // min amount is different for each coin
+
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/conversions";
+        String METHOD = "POST";
+        // TODO: change the SIGN in getCoinPrice to also use requestBody like this and pass it into generateSignedHeader
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
     }
 
     // TODO: check out coin price method
@@ -161,6 +184,9 @@ public class App {
         }
         // TODO: ask about risk tolerance
         getCoinPrice(client, "BTC-USD");
+
+        HttpResponse<String> res = sellCoin(client, "BTC-USD");
+        System.out.println(res.body());
         // for each Coin
             // check price of coin:
                 // buy / sell if ...
