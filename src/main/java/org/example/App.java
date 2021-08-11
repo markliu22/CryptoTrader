@@ -35,6 +35,8 @@ public class App {
 
     // response.body() after getting prices is a json array of json arrays
     public static Double parsePrices(String responseBody) {
+        System.out.println("here is responseBody");
+        System.out.println(responseBody);
         JSONArray arr = new JSONArray(responseBody);
         JSONArray mostRecent = arr.getJSONArray(0);
         double open = mostRecent.getDouble(1);
@@ -62,27 +64,29 @@ public class App {
     }
 
     // TODO: place order method
-//    public static void buyCoin(HttpClient client, String coinName) {
-        // must have enough usd in their account
-        // https://docs.pro.coinbase.com/#place-a-new-order
-//    }
+    public static void buyCoin(HttpClient client, String coinName) {
+//         must have enough usd in their account
+//         https://docs.pro.coinbase.com/#place-a-new-order
+
+    }
 
 
     // TODO: sell method
+    // TODO: fix this
+    // /conversions only works for USD to USDC, use https://docs.pro.coinbase.com/#coinbase56 instead
     public static HttpResponse<String> sellCoin(HttpClient client, String coinName) throws IOException, InterruptedException {
         // https://docs.pro.coinbase.com/#create-conversion
         // convert to usd
         JSONObject requestBody = new JSONObject();
-        requestBody.put("from", "UNI"); // "BTC" is currency id, not "BTC-USD"
-        requestBody.put("to", "USD");
-        requestBody.put("amount", "1"); // min amount is different for each coin
-
+        // "USDC" to "USD" with amount "100" is working
+        requestBody.put("from", "USD"); // "BTC" is currency id, not "BTC-USD"
+        requestBody.put("to", "BTC");
+        requestBody.put("amount", "100");
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/conversions";
         String METHOD = "POST";
         // TODO: change the SIGN in getCoinPrice to also use requestBody like this and pass it into generateSignedHeader
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
-
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                 .setHeader(CB_ACCESS_SIGN, SIGN)
@@ -96,13 +100,13 @@ public class App {
         return response;
     }
 
-    // TODO: check out coin price method
     // https://docs.pro.coinbase.com/#get-historic-rates
     public static Double getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         // must be one of {60, 300, 900, 3600, 21600, 86400}
         int granularity = 60; // get most recent
-        // "if data points are readily available, your response may contain as many as 300 candles and some of those candles may precede your declared start value"
+        // "if data points are readily available, your response may contain as many as 300 candles and some of
+        // those candles may precede your declared start value"
         String REQUEST_PATH = "/products/" + coinTicker + "/candles?granularity=" + granularity;
         String METHOD = "GET";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
@@ -137,7 +141,6 @@ public class App {
                 .setHeader("content-type", "application/json")
                 .uri(URI.create(BASE_URL + REQUEST_PATH))
                 .build();
-        // response.body() contains a list of accounts, 1 for each coin
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         return response;
     }
@@ -147,10 +150,15 @@ public class App {
         // auto import: https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
         // get env vars from: https://github.com/cdimascio/dotenv-java
         Dotenv dotenv = Dotenv.load();
-        BASE_URL = dotenv.get("BASE_URL");
-        API_KEY = dotenv.get("API_KEY");
-        SECRET_KEY = dotenv.get("SECRET_KEY");
-        PASSPHRASE = dotenv.get("PASSPHRASE");
+        // BASE_URL = dotenv.get("BASE_URL");
+        // API_KEY = dotenv.get("API_KEY");
+        // SECRET_KEY = dotenv.get("SECRET_KEY");
+        // PASSPHRASE = dotenv.get("PASSPHRASE");
+        // TODO: change^ this back once done with sandbox api
+        BASE_URL = dotenv.get("SANDBOX_URL");
+        API_KEY = dotenv.get("SANDBOX_API_KEY");
+        SECRET_KEY = dotenv.get("SANDBOX_SECRET_KEY");
+        PASSPHRASE = dotenv.get("SANDBOX_PASSPHRASE");
         HttpClient client = HttpClient.newHttpClient();
 
         // enter num coins you're watching
@@ -182,15 +190,15 @@ public class App {
             System.out.println(currCoin.getName() + " added.");
             sc.nextLine();
         }
-        // TODO: ask about risk tolerance
-        getCoinPrice(client, "BTC-USD");
+        // TODO: ask about risk tolerance here
+        // getCoinPrice(client, "BTC-USD");
 
+        // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
+        // Helpful: https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
         HttpResponse<String> res = sellCoin(client, "BTC-USD");
         System.out.println(res.body());
         // for each Coin
-            // check price of coin:
-                // buy / sell if ...
-            // sleep for like 10-ish mins
+            // Mean reversion
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
