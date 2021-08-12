@@ -70,17 +70,35 @@ public class App {
 
     }
 
-
-    // TODO: sell method
-    // TODO: fix this
     // /conversions only works for USD to USDC, use https://docs.pro.coinbase.com/#coinbase56 instead
-    public static HttpResponse<String> sellCoin(HttpClient client, String coinName) throws IOException, InterruptedException {
-        // https://docs.pro.coinbase.com/#create-conversion
-        // convert to usd
+    public static HttpResponse<String> sellCoin(HttpClient client, String coinName, String coinbaseAccId) throws IOException, InterruptedException {
         JSONObject requestBody = new JSONObject();
-        // "USDC" to "USD" with amount "100" is working
-        requestBody.put("from", "USD"); // "BTC" is currency id, not "BTC-USD"
-        requestBody.put("to", "BTC");
+        requestBody.put("amount", "0.01");
+        requestBody.put("currency", coinName);
+        requestBody.put("coinbase_account_id", coinbaseAccId);
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/withdrawals/coinbase-account";
+        String METHOD = "POST";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
+    }
+
+    // TODO: delete this method?
+    public static HttpResponse<String> convert(HttpClient client) throws IOException, InterruptedException {
+        // https://docs.pro.coinbase.com/#create-conversion
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("from", "USD");
+        requestBody.put("to", "USDC");
         requestBody.put("amount", "100");
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/conversions";
@@ -119,11 +137,28 @@ public class App {
                 .setHeader("content-type", "application/json")
                 .uri(URI.create(BASE_URL + REQUEST_PATH))
                 .build();
-        // response.body() contains a list of accounts, 1 for each coin
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
         return parsePrices(response.body());
-        // TODO: find a way to analyze these recent prices?
+        // TODO: find a way to analyze these recent prices
+    }
+
+    public static HttpResponse<String> getCoinbaseAccounts(HttpClient client) throws IOException, InterruptedException {
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/coinbase-accounts";
+        String METHOD = "GET";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .GET()
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
     }
 
     // response contains a bunch of accounts, 1 for each coin
@@ -145,16 +180,19 @@ public class App {
         return response;
     }
 
-    // start bot method
+    // start trading
     public static void startProcess() throws IOException, InterruptedException {
-        // auto import: https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
-        // get env vars from: https://github.com/cdimascio/dotenv-java
+        // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
+        // Helpful: https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
+        // Helpful: https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
+        // Helpful: https://github.com/cdimascio/dotenv-java
+
         Dotenv dotenv = Dotenv.load();
         // BASE_URL = dotenv.get("BASE_URL");
         // API_KEY = dotenv.get("API_KEY");
         // SECRET_KEY = dotenv.get("SECRET_KEY");
         // PASSPHRASE = dotenv.get("PASSPHRASE");
-        // TODO: change^ this back once done with sandbox api
+        // TODO: uncomment top, comment bottom once done with sandbox api
         BASE_URL = dotenv.get("SANDBOX_URL");
         API_KEY = dotenv.get("SANDBOX_API_KEY");
         SECRET_KEY = dotenv.get("SANDBOX_SECRET_KEY");
@@ -167,36 +205,32 @@ public class App {
         int numCoins = sc.nextInt();
         sc.nextLine();
         Coin[] coins = new Coin[numCoins];
-
+        // TODO: also ask about risk tolerance here
         for(int i = 0; i < numCoins; i++) {
-            // Ex: BTC-USD
+            // BTC
             System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
-
             System.out.println("Target price to sell coin " + (i + 1) + ") ($):");
             double sellPrice = sc.nextDouble();
-
             System.out.println("Target price to buy coin " + (i + 1) + ") ($):");
             double buyPrice = sc.nextDouble();
-
             System.out.println("Maximum amount of coin " + (i + 1) + ") to sell at a time  ($):");
             double maxBuyAmount = sc.nextDouble();
-
             System.out.println("Maximum amount of coin " + (i + 1) + ") to buy at a time ($):");
             double maxSellAmount = sc.nextDouble();
-
             Coin currCoin = new Coin(name, sellPrice, buyPrice, maxBuyAmount, maxSellAmount);
             coins[i] = currCoin;
             System.out.println(currCoin.getName() + " added.");
             sc.nextLine();
         }
-        // TODO: ask about risk tolerance here
-        // getCoinPrice(client, "BTC-USD");
 
-        // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
-        // Helpful: https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
-        HttpResponse<String> res = sellCoin(client, "BTC-USD");
+
+        // called getCoinbaseAccounts
+        // got account id with "currency":"BTC" => 95671473-4dda-5264-a654-fc6923e8a334   <= * sandbox *
+        HttpResponse<String> res = sellCoin(client, "BTC", "95671473-4dda-5264-a654-fc6923e8a334");
         System.out.println(res.body());
+
+        // TODO:
         // for each Coin
             // Mean reversion
     }
