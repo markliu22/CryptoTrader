@@ -63,14 +63,33 @@ public class App {
         }
     }
 
-    // TODO: place order method
-    public static void buyCoin(HttpClient client, String coinName) {
-//         must have enough usd in their account
-//         https://docs.pro.coinbase.com/#place-a-new-order
-
+    // TODO: add limit order?
+    // https://docs.pro.coinbase.com/#place-a-new-order
+    public static HttpResponse<String> buyCoin(HttpClient client, String coinName) throws IOException, InterruptedException {
+        // TODO: add check that they have enough in their account
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("size", "0.05"); // place market order for 0.05 BTC
+        requestBody.put("type", "market");
+        requestBody.put("side", "buy");
+        requestBody.put("product_id", "BTC-USD");
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/orders";
+        String METHOD = "POST";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
     }
 
-    // /conversions only works for USD to USDC, use https://docs.pro.coinbase.com/#coinbase56 instead
+    // https://docs.pro.coinbase.com/#coinbase56
     public static HttpResponse<String> sellCoin(HttpClient client, String coinName, String coinbaseAccId) throws IOException, InterruptedException {
         JSONObject requestBody = new JSONObject();
         requestBody.put("amount", "0.01");
@@ -227,8 +246,11 @@ public class App {
 
         // called getCoinbaseAccounts
         // got account id with "currency":"BTC" => 95671473-4dda-5264-a654-fc6923e8a334   <= * sandbox *
-        HttpResponse<String> res = sellCoin(client, "BTC", "95671473-4dda-5264-a654-fc6923e8a334");
-        System.out.println(res.body());
+//        HttpResponse<String> res = sellCoin(client, "BTC", "95671473-4dda-5264-a654-fc6923e8a334");
+//        System.out.println(res.body());
+
+        HttpResponse<String> res2 = buyCoin(client, "BTC");
+        System.out.println(res2);
 
         // TODO:
         // for each Coin
