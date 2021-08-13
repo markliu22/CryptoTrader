@@ -33,6 +33,9 @@ public class App {
     private static String SECRET_KEY;
     private static String PASSPHRASE;
 
+    static boolean isRunning = true;
+
+    // TODO: delete this if deleting getCoinPrice() function
     // response.body() after getting prices is a json array of json arrays
     public static Double parsePrices(String responseBody) {
         System.out.println("here is responseBody");
@@ -65,13 +68,14 @@ public class App {
 
     // TODO: add limit order?
     // https://docs.pro.coinbase.com/#place-a-new-order
-    public static HttpResponse<String> buyCoin(HttpClient client, String coinName) throws IOException, InterruptedException {
+    // name = "BTC-USD"
+    public static HttpResponse<String> buyCoin(HttpClient client, String name, double amount) throws IOException, InterruptedException {
         // TODO: add check that they have enough in their account
         JSONObject requestBody = new JSONObject();
-        requestBody.put("size", "0.05"); // place market order for 0.05 BTC
+        requestBody.put("size", String.valueOf(amount)); // place market order for amount BTC
         requestBody.put("type", "market");
         requestBody.put("side", "buy");
-        requestBody.put("product_id", "BTC-USD");
+        requestBody.put("product_id", name);
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/orders";
         String METHOD = "POST";
@@ -89,11 +93,37 @@ public class App {
         return response;
     }
 
-    // https://docs.pro.coinbase.com/#coinbase56
-    public static HttpResponse<String> sellCoin(HttpClient client, String coinName, String coinbaseAccId) throws IOException, InterruptedException {
+    // pass in coinbase pro wallet address of the corresponding cryptocurrency
+    // name = "BTC"
+    public static HttpResponse<String> withdrawToWallet(HttpClient client, String name, double amount, String walletId) throws IOException, InterruptedException {
         JSONObject requestBody = new JSONObject();
-        requestBody.put("amount", "0.01");
-        requestBody.put("currency", coinName);
+        requestBody.put("amount", String.valueOf(amount));
+        requestBody.put("currency", name);
+        requestBody.put("coinbase_account_id", walletId);
+        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+        String REQUEST_PATH = "/withdrawals/crypto";
+        String METHOD = "POST";
+        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
+        HttpRequest request = HttpRequest.newBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
+    }
+
+    // https://docs.pro.coinbase.com/#coinbase56
+    // withdraws to a regular Coinbase account (not pro)
+    // name = "BTC"
+    public static HttpResponse<String> withdrawToCoinbase(HttpClient client, String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("amount", String.valueOf(amount));
+        requestBody.put("currency", name);
         requestBody.put("coinbase_account_id", coinbaseAccId);
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/withdrawals/coinbase-account";
@@ -137,6 +167,7 @@ public class App {
         return response;
     }
 
+    // TODO: either delete this function or change it to get Moving Average (which takes in how far back we should go)
     // https://docs.pro.coinbase.com/#get-historic-rates
     public static Double getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
@@ -199,7 +230,19 @@ public class App {
         return response;
     }
 
-    // start trading
+    // TODO: finish this
+    public static String analyze() {
+        String action = "NO_ACTION";
+        // returns "BUY", "SELL", or "NO_ACTION"
+
+        // get MA of past day?
+        // get MA of past hour?
+        // if short term MA crosses above long term MA by X amount, buy because trend is shifting up
+        // if short term MA crosses below long term MA by Y amount, sell because trend is shifting down
+        // https://www.investopedia.com/articles/active-trading/052014/how-use-moving-average-buy-stocks.asp
+        return action;
+    }
+
     public static void startProcess() throws IOException, InterruptedException {
         // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
         // Helpful: https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
@@ -243,18 +286,15 @@ public class App {
             sc.nextLine();
         }
 
+        // TODO: finish this
+        //  while(isRunning) {
+            // for each Coin
+                // analyze
+                // then shleep
+        // }
 
-        // called getCoinbaseAccounts
-        // got account id with "currency":"BTC" => 95671473-4dda-5264-a654-fc6923e8a334   <= * sandbox *
-//        HttpResponse<String> res = sellCoin(client, "BTC", "95671473-4dda-5264-a654-fc6923e8a334");
-//        System.out.println(res.body());
-
-        HttpResponse<String> res2 = buyCoin(client, "BTC");
-        System.out.println(res2);
-
-        // TODO:
-        // for each Coin
-            // Mean reversion
+        // TODO: for any function, if we get back any status code >= 300, set isRunning = false
+        // usually is bc insufficient funds
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
