@@ -236,6 +236,11 @@ public class App {
         return response;
     }
 
+    // TODO: make this better
+    /*
+    * Other exit methods could be when the price crosses below a moving average (not shown), or when an indicator such as the stochastic oscillator crosses its signal line.
+    * https://www.investopedia.com/terms/s/stochasticoscillator.asp
+    * */
     public static String getAction(String coinTicker, long longMaSeconds, long shortMaSeconds) throws IOException, InterruptedException {
         double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
         double longMa = getMovingAverage(coinTicker, longMaSeconds);
