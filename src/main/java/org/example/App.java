@@ -195,20 +195,8 @@ public class App {
                 .uri(URI.create(BASE_URL + REQUEST_PATH))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        System.out.println("RESPONSE:");
-        System.out.println(response);
         // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
         return calculateAverage(response.body());
-    }
-
-    public static String getAction(String coinTicker, long longMaSeconds, long shortMaSeconds) throws IOException, InterruptedException {
-        // make 2 calls to getMovingAverage
-        double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
-        double longMA = getMovingAverage(coinTicker, longMaSeconds);
-        // compare
-
-        // return "BUY", "SELL", or "NO_ACTION"
-        return "NO_ACTION";
     }
 
     public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
@@ -248,17 +236,15 @@ public class App {
         return response;
     }
 
-    // TODO: finish this
-    public static String analyze() {
-        String action = "NO_ACTION";
-        // returns "BUY", "SELL", or "NO_ACTION"
-
-        // get MA of past day?
-        // get MA of past hour?
-        // if short term MA crosses above long term MA by X amount, buy because trend is shifting up
-        // if short term MA crosses below long term MA by Y amount, sell because trend is shifting down
-        // https://www.investopedia.com/articles/active-trading/052014/how-use-moving-average-buy-stocks.asp
-        return action;
+    public static String getAction(String coinTicker, long longMaSeconds, long shortMaSeconds) throws IOException, InterruptedException {
+        double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
+        double longMa = getMovingAverage(coinTicker, longMaSeconds);
+        if(shortMa > longMa) {
+            return "BUY";
+        } else if(shortMa < longMa) {
+            return "SELL";
+        }
+        return "NO_ACTION";
     }
 
     // TODO: extract all POST requests into 1 function
@@ -279,27 +265,22 @@ public class App {
         API_KEY = dotenv.get("SANDBOX_API_KEY");
         SECRET_KEY = dotenv.get("SANDBOX_SECRET_KEY");
         PASSPHRASE = dotenv.get("SANDBOX_PASSPHRASE");
-        client = HttpClient.newHttpClient(); // !!
 
+        client = HttpClient.newHttpClient(); // !!
         Scanner sc = new Scanner(System.in);
         System.out.println("Number of coins to watch:");
         int numCoins = sc.nextInt();
         sc.nextLine();
         Coin[] coins = new Coin[numCoins];
+
         // TODO: also ask about risk tolerance here
         for (int i = 0; i < numCoins; i++) {
             // BTC
             System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
-            System.out.println("Target price to sell coin " + (i + 1) + ") ($):");
-            double sellPrice = sc.nextDouble();
-            System.out.println("Target price to buy coin " + (i + 1) + ") ($):");
-            double buyPrice = sc.nextDouble();
-            System.out.println("Maximum amount of coin " + (i + 1) + ") to sell at a time  ($):");
-            double maxBuyAmount = sc.nextDouble();
-            System.out.println("Maximum amount of coin " + (i + 1) + ") to buy at a time ($):");
-            double maxSellAmount = sc.nextDouble();
-            Coin currCoin = new Coin(name, sellPrice, buyPrice, maxBuyAmount, maxSellAmount);
+            System.out.println("Some question about risk tolerance");
+            double factor = sc.nextDouble();
+            Coin currCoin = new Coin(name, name, factor);
             coins[i] = currCoin;
             System.out.println(currCoin.getName() + " added.");
             sc.nextLine();
@@ -309,8 +290,7 @@ public class App {
         long secondsInADay = 86400; // short MA
         double longMa = getMovingAverage("BTC-USD", secondsInAWeek);
         double shortMa = getMovingAverage("BTC-USD", secondsInADay);
-        System.out.println(longMa);
-        System.out.println(shortMa);
+        // withdraw coin is the only one that uses the actual name like BTC instead of BTC-USD
 
         // TODO: finish this
         //  while(isRunning) {
