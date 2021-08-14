@@ -28,6 +28,10 @@ public class App {
     private static final String CB_ACCESS_KEY = "CB-ACCESS-KEY";
     private static final String CB_ACCESS_PASSPHRASE = "CB-ACCESS-PASSPHRASE";
 
+    private static final String BUY_ACTION = "BUY";
+    private static final String SELL_ACTION = "SELL";
+    private static final String NO_ACTION = "NO_ACTION";
+
     private static String BASE_URL;
     private static String API_KEY;
     private static String SECRET_KEY;
@@ -61,10 +65,10 @@ public class App {
             String response = Base64.getEncoder().encodeToString(sha256.doFinal(prehash.getBytes()));
             return response;
         } catch (CloneNotSupportedException | InvalidKeyException e) {
-            System.out.println(e);
+            System.out.println("CloneNotSupportedException | InvalidKeyException: " + e.getMessage());
             throw new RuntimeErrorException(new Error("Cannot set up authentication headers."));
         } catch (NoSuchAlgorithmException e) {
-            System.out.println(e);
+            System.err.println("NoSuchAlgorithmException: " + e.getMessage());
             throw new RuntimeErrorException(new Error("Cannot set up authentication headers."));
         }
     }
@@ -200,23 +204,24 @@ public class App {
         return calculateAverage(response.body());
     }
 
-    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
-        String TIMESTAMP = Instant.now().getEpochSecond() + "";
-        String REQUEST_PATH = "/coinbase-accounts";
-        String METHOD = "GET";
-        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .setHeader(CB_ACCESS_SIGN, SIGN)
-                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-                .setHeader(CB_ACCESS_KEY, API_KEY)
-                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-                .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + REQUEST_PATH))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return response;
-    }
+    // TODO: delete?
+//    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
+//        String TIMESTAMP = Instant.now().getEpochSecond() + "";
+//        String REQUEST_PATH = "/coinbase-accounts";
+//        String METHOD = "GET";
+//        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
+//        HttpRequest request = HttpRequest.newBuilder()
+//                .GET()
+//                .setHeader(CB_ACCESS_SIGN, SIGN)
+//                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+//                .setHeader(CB_ACCESS_KEY, API_KEY)
+//                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+//                .setHeader("content-type", "application/json")
+//                .uri(URI.create(BASE_URL + REQUEST_PATH))
+//                .build();
+//        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+//        return response;
+//    }
 
     // response contains a bunch of accounts, 1 for each coin
     public static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
@@ -242,15 +247,17 @@ public class App {
     * Other exit methods could be when the price crosses below a moving average (not shown), or when an indicator such as the stochastic oscillator crosses its signal line.
     * https://www.investopedia.com/terms/s/stochasticoscillator.asp
     * */
-    public static String getAction(String coinTicker, long longMaSeconds, long shortMaSeconds) throws IOException, InterruptedException {
+    public static String getAction(String coinTicker, long shortMaSeconds, long longMaSeconds) throws IOException, InterruptedException {
         double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
         double longMa = getMovingAverage(coinTicker, longMaSeconds);
+        System.out.println("[" + coinTicker +"][7 DAY M.A.]:" + longMa);
+        System.out.println("[" + coinTicker +"]][1 DAY M.A.]: " + shortMa);
         if(shortMa > longMa) {
-            return "BUY";
+            return BUY_ACTION;
         } else if(shortMa < longMa) {
-            return "SELL";
+            return SELL_ACTION;
         }
-        return "NO_ACTION";
+        return NO_ACTION;
     }
 
     // TODO: extract all POST requests into 1 function
@@ -273,19 +280,19 @@ public class App {
         SECRET_KEY = dotenv.get("SANDBOX_SECRET_KEY");
         PASSPHRASE = dotenv.get("SANDBOX_PASSPHRASE");
 
-        client = HttpClient.newHttpClient(); // !!
+        client = HttpClient.newHttpClient();
         Scanner sc = new Scanner(System.in);
         System.out.println("Number of coins to watch:");
         int numCoins = sc.nextInt();
         sc.nextLine();
         Coin[] coins = new Coin[numCoins];
 
-        // TODO: also ask about risk tolerance here
         for (int i = 0; i < numCoins; i++) {
             // BTC
             System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
-            System.out.println("Some question about risk tolerance");
+            // TODO: add some factor so we don't buy if shortMa > longMa by just a little bit
+            System.out.println("TODO: some question about risk tolerance here");
             double factor = sc.nextDouble();
             Coin currCoin = new Coin(name, name, factor);
             coins[i] = currCoin;
@@ -293,23 +300,37 @@ public class App {
             sc.nextLine();
         }
 
-        long secondsInAWeek = 604800; // long MA
         long secondsInADay = 86400; // short MA
-        // withdraw coin is the only one that uses the actual name like BTC instead of BTC-USD
+        long secondsInAWeek = 604800; // long MA
+        // withdraw coin was the only one that used BTC instead of BTC-USD but can delete that now
 
-        // Working!
-//        HttpResponse<String> res = placeOrder("BTC-USD", 0.01, "sell");
-//        System.out.println(res.body());
+        // this converts to USD, not USDC
+        // HttpResponse<String> res = placeOrder("BTC-USD", 0.05, "sell");
 
-        // TODO: finish this
-        //  while(isRunning) {
-        // for each Coin
-        // analyze
-        // then shleep
-        // }
+        while(isRunning) {
+            for(Coin curr : coins) {
+                String action = getAction(curr.getProdId(), secondsInADay, secondsInAWeek);
+                try {
+                    if(action.equals(BUY_ACTION)) {
+                        placeOrder(curr.getProdId(), 0.01, "buy");
+                    } else if(action.equals(SELL_ACTION)) {
+                        placeOrder(curr.getProdId(), 0.01, "sell");
+                    }
+                } catch (IndexOutOfBoundsException e) {
+                    System.err.println("IndexOutOfBoundsException: " + e.getMessage());
+                } catch (IOException e) {
+                    System.err.println("IOException: " + e.getMessage());
+                }
+                System.out.println("[" + action + "] " + curr.getProdId());
+            }
 
-        // TODO: for any function, if we get back any status code >= 300, set isRunning = false
-        // usually is bc insufficient funds
+            try {
+                System.out.println("[...SLEEP...]");
+                Thread.sleep(60000); // milliseconds
+            } catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
