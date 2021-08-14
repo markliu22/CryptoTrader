@@ -21,8 +21,6 @@ import java.time.Instant;
 import java.util.*;
 
 public class App {
-    // keep variables private, interact with them through public getters and setters
-    // constants:
     private static final String CB_ACCESS_SIGN = "CB-ACCESS-SIGN";
     private static final String CB_ACCESS_TIMESTAMP = "CB-ACCESS-TIMESTAMP";
     private static final String CB_ACCESS_KEY = "CB-ACCESS-KEY";
@@ -54,7 +52,7 @@ public class App {
         return sum / n;
     }
 
-    // old decode was wrong, correct version: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
+    // ref: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
     public static String generateSignedHeader(String requestPath, String method, String body, String timestamp) {
         try {
             String prehash = timestamp + method.toUpperCase() + requestPath + body;
@@ -75,7 +73,7 @@ public class App {
 
     // TODO: add limit order?
     // https://docs.pro.coinbase.com/#place-a-new-order
-    // name = "BTC-USD"
+    // requires "BTC-USD" format
     // action has to be buy or sell
     public static HttpResponse<String> placeOrder(String name, double amount, String action) throws IOException, InterruptedException {
         // TODO: add check that they have enough in their account
@@ -103,7 +101,7 @@ public class App {
 
     // TODO: delete?
     // pass in coinbase pro wallet address of the corresponding cryptocurrency
-    // name = "BTC"
+    // requires "BTC" format
 //    public static HttpResponse<String> withdrawToWallet(String name, double amount, String walletId) throws IOException, InterruptedException {
 //        JSONObject requestBody = new JSONObject();
 //        requestBody.put("amount", String.valueOf(amount));
@@ -128,7 +126,7 @@ public class App {
 
     // https://docs.pro.coinbase.com/#coinbase56
     // withdraws to a regular Coinbase account (not pro)
-    // name = "BTC"
+    // requires "BTC" format
     // TODO: delete?
 //    public static HttpResponse<String> withdrawToCoinbase(String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
 //        JSONObject requestBody = new JSONObject();
@@ -176,9 +174,7 @@ public class App {
 //        return response;
 //    }
 
-    // TODO: either delete this function or change it to get Moving Average (which takes in how far back we should go)
-    // https://docs.pro.coinbase.com/#get-historic-rates
-    // BTC-USD
+    // requires "BTC-USD" format
     public static double getMovingAverage(String coinTicker, long maSeconds) throws IOException, InterruptedException {
         int granularity = 86400; // since we only get MA from past day and past week, keep this
         // smaller intervals need smaller granularity or else gives error
@@ -204,7 +200,7 @@ public class App {
         return calculateAverage(response.body());
     }
 
-    // TODO: delete?
+    // TODO: delete
 //    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
 //        String TIMESTAMP = Instant.now().getEpochSecond() + "";
 //        String REQUEST_PATH = "/coinbase-accounts";
@@ -222,6 +218,20 @@ public class App {
 //        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 //        return response;
 //    }
+
+    // requires "BTC" format
+    public static double getBalance(String name) throws IOException, InterruptedException {
+        HttpResponse<String> responseBody = getAllAccounts();
+        JSONArray arr = new JSONArray(responseBody);
+
+        for(int i = 0; i < arr.length(); i++) {
+            JSONObject curr = arr.getJSONObject(i);
+            if(curr.get("currency").equals(name)) {
+                return (double)curr.get("available");
+            }
+        }
+        return -1.0;
+    }
 
     // response contains a bunch of accounts, 1 for each coin
     public static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
@@ -247,14 +257,14 @@ public class App {
     * Other exit methods could be when the price crosses below a moving average (not shown), or when an indicator such as the stochastic oscillator crosses its signal line.
     * https://www.investopedia.com/terms/s/stochasticoscillator.asp
     * */
-    public static String getAction(String coinTicker, long shortMaSeconds, long longMaSeconds) throws IOException, InterruptedException {
-        double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
-        double longMa = getMovingAverage(coinTicker, longMaSeconds);
-        System.out.println("[" + coinTicker +"][7 DAY M.A.]:" + longMa);
-        System.out.println("[" + coinTicker +"]][1 DAY M.A.]: " + shortMa);
-        if(shortMa > longMa) {
+    public static String getAction(Coin coin, long shortMaSeconds, long longMaSeconds) throws IOException, InterruptedException {
+        double shortMa = getMovingAverage(coin.getProdId(), shortMaSeconds);
+        double longMa = getMovingAverage(coin.getProdId(), longMaSeconds);
+        System.out.printf("[%s][7 DAY M.A.]: %.2f\n", coin.getProdId(), longMa);
+        System.out.printf("[%s][1 DAY M.A.]: %.2f\n", coin.getProdId(), shortMa);
+        if(shortMa > longMa + coin.getDiffAmtRequired()) {
             return BUY_ACTION;
-        } else if(shortMa < longMa) {
+        } else if(shortMa + coin.getDiffAmtRequired() < longMa) {
             return SELL_ACTION;
         }
         return NO_ACTION;
@@ -291,12 +301,20 @@ public class App {
             // BTC
             System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
-            // TODO: add some factor so we don't buy if shortMa > longMa by just a little bit
-            System.out.println("TODO: some question about risk tolerance here");
-            double factor = sc.nextDouble();
-            Coin currCoin = new Coin(name, name, factor);
+
+            System.out.println("Enter your risk tolerance as 1, 2, or 3 (1 is low risk, 3 is high risk):");
+            int riskFactor = sc.nextInt();
+
+            // so we don't buy if shortMa > longMa by just a little bit
+            System.out.println("Amount difference needed between long & short term moving average to yield action:");
+            double diffAmtRequired = sc.nextDouble();
+
+            System.out.println("Amount to buy in first order:");
+            double firstOrderAmt = sc.nextDouble();
+
+            Coin currCoin = new Coin(name, riskFactor, diffAmtRequired, firstOrderAmt);
             coins[i] = currCoin;
-            System.out.println(currCoin.getName() + " added.");
+            System.out.printf("[%s][ADDED]\n", currCoin.getName());
             sc.nextLine();
         }
 
@@ -305,16 +323,20 @@ public class App {
         // withdraw coin was the only one that used BTC instead of BTC-USD but can delete that now
 
         // this converts to USD, not USDC
-        // HttpResponse<String> res = placeOrder("BTC-USD", 0.05, "sell");
+        // HttpResponse<String> res = placeOrder("BTC-USD", 0.1, "sell");
 
         while(isRunning) {
             for(Coin curr : coins) {
-                String action = getAction(curr.getProdId(), secondsInADay, secondsInAWeek);
+                String action = getAction(curr, secondsInADay, secondsInAWeek);
                 try {
                     if(action.equals(BUY_ACTION)) {
-                        placeOrder(curr.getProdId(), 0.01, "buy");
+                        placeOrder(curr.getProdId(), curr.getMadeInitialOrder() ? curr.getBuyFactor() * getBalance(curr.getName()) : curr.getFirstOrderAmt(), "buy");
+                        // if just made initial order, change that boolean to true now
+                        if(!curr.getMadeInitialOrder()) {
+                            curr.triggerMadeInitialOrder();
+                        }
                     } else if(action.equals(SELL_ACTION)) {
-                        placeOrder(curr.getProdId(), 0.01, "sell");
+                        placeOrder(curr.getProdId(), curr.getSellFactor() * getBalance(curr.getName()), "sell");
                     }
                 } catch (IndexOutOfBoundsException e) {
                     System.err.println("IndexOutOfBoundsException: " + e.getMessage());
