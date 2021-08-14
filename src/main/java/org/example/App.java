@@ -34,17 +34,20 @@ public class App {
     private static String PASSPHRASE;
 
     static boolean isRunning = true;
+    static HttpClient client; // TODO: move this somewhere else idk
 
-    // TODO: delete this if deleting getCoinPrice() function
-    // response.body() after getting prices is a json array of json arrays
-    public static Double parsePrices(String responseBody) {
-        System.out.println("here is responseBody");
-        System.out.println(responseBody);
+    public static double calculateAverage(String responseBody) {
         JSONArray arr = new JSONArray(responseBody);
-        JSONArray mostRecent = arr.getJSONArray(0);
-        double open = mostRecent.getDouble(1);
-        double close = mostRecent.getDouble(2);
-        return (open + close) / 2;
+        double sum = 0;
+        int n = arr.length();
+
+        for(int i = 0; i < n; i++) {
+            JSONArray curr = arr.getJSONArray(i);
+            double low = curr.getDouble(1);
+            double high = curr.getDouble(2);
+            sum += low + (high - low) / 2;
+        }
+        return sum / n;
     }
 
     // old decode was wrong, correct version: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
@@ -69,7 +72,7 @@ public class App {
     // TODO: add limit order?
     // https://docs.pro.coinbase.com/#place-a-new-order
     // name = "BTC-USD"
-    public static HttpResponse<String> buyCoin(HttpClient client, String name, double amount) throws IOException, InterruptedException {
+    public static HttpResponse<String> buyCoin(String name, double amount) throws IOException, InterruptedException {
         // TODO: add check that they have enough in their account
         JSONObject requestBody = new JSONObject();
         requestBody.put("size", String.valueOf(amount)); // place market order for amount BTC
@@ -93,13 +96,15 @@ public class App {
         return response;
     }
 
+    // TODO: test this
+    // TODO: merge this with withdrawToCoinbase function?
     // pass in coinbase pro wallet address of the corresponding cryptocurrency
     // name = "BTC"
-    public static HttpResponse<String> withdrawToWallet(HttpClient client, String name, double amount, String walletId) throws IOException, InterruptedException {
+    public static HttpResponse<String> withdrawToWallet(String name, double amount, String walletId) throws IOException, InterruptedException {
         JSONObject requestBody = new JSONObject();
         requestBody.put("amount", String.valueOf(amount));
         requestBody.put("currency", name);
-        requestBody.put("coinbase_account_id", walletId);
+        requestBody.put("crypto_address", walletId);
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/withdrawals/crypto";
         String METHOD = "POST";
@@ -120,7 +125,7 @@ public class App {
     // https://docs.pro.coinbase.com/#coinbase56
     // withdraws to a regular Coinbase account (not pro)
     // name = "BTC"
-    public static HttpResponse<String> withdrawToCoinbase(HttpClient client, String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
+    public static HttpResponse<String> withdrawToCoinbase(String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
         JSONObject requestBody = new JSONObject();
         requestBody.put("amount", String.valueOf(amount));
         requestBody.put("currency", name);
@@ -143,7 +148,7 @@ public class App {
     }
 
     // TODO: delete this method?
-    public static HttpResponse<String> convert(HttpClient client) throws IOException, InterruptedException {
+    public static HttpResponse<String> convert() throws IOException, InterruptedException {
         // https://docs.pro.coinbase.com/#create-conversion
         JSONObject requestBody = new JSONObject();
         requestBody.put("from", "USD");
@@ -152,7 +157,6 @@ public class App {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/conversions";
         String METHOD = "POST";
-        // TODO: change the SIGN in getCoinPrice to also use requestBody like this and pass it into generateSignedHeader
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
@@ -169,15 +173,18 @@ public class App {
 
     // TODO: either delete this function or change it to get Moving Average (which takes in how far back we should go)
     // https://docs.pro.coinbase.com/#get-historic-rates
-    public static Double getCoinPrice(HttpClient client, String coinTicker) throws IOException, InterruptedException {
+    public static double getMovingAverage(String coinTicker, long maSeconds) throws IOException, InterruptedException {
+        int granularity = 86400; // since we only get MA from past day and past week, keep this
+        // smaller intervals need smaller granularity or else gives error
+
+        String MAEnd = Instant.now().toString();
+        String MAStart = Instant.now().minusSeconds(maSeconds).toString();
+
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
-        // must be one of {60, 300, 900, 3600, 21600, 86400}
-        int granularity = 60; // get most recent
-        // "if data points are readily available, your response may contain as many as 300 candles and some of
-        // those candles may precede your declared start value"
-        String REQUEST_PATH = "/products/" + coinTicker + "/candles?granularity=" + granularity;
+        String REQUEST_PATH = "/products/" + coinTicker + "/candles?start=" + MAStart + "&end=" + MAEnd + "&granularity=" + granularity;
         String METHOD = "GET";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
+
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
                 .setHeader(CB_ACCESS_SIGN, SIGN)
@@ -188,12 +195,23 @@ public class App {
                 .uri(URI.create(BASE_URL + REQUEST_PATH))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        System.out.println("RESPONSE:");
+        System.out.println(response);
         // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
-        return parsePrices(response.body());
-        // TODO: find a way to analyze these recent prices
+        return calculateAverage(response.body());
     }
 
-    public static HttpResponse<String> getCoinbaseAccounts(HttpClient client) throws IOException, InterruptedException {
+    public static String getAction(String coinTicker, long longMaSeconds, long shortMaSeconds) throws IOException, InterruptedException {
+        // make 2 calls to getMovingAverage
+        double shortMa = getMovingAverage(coinTicker, shortMaSeconds);
+        double longMA = getMovingAverage(coinTicker, longMaSeconds);
+        // compare
+
+        // return "BUY", "SELL", or "NO_ACTION"
+        return "NO_ACTION";
+    }
+
+    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/coinbase-accounts";
         String METHOD = "GET";
@@ -212,7 +230,7 @@ public class App {
     }
 
     // response contains a bunch of accounts, 1 for each coin
-    public static HttpResponse<String> getAllAccounts(HttpClient client) throws IOException, InterruptedException {
+    public static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/accounts";
         String METHOD = "GET";
@@ -243,6 +261,8 @@ public class App {
         return action;
     }
 
+    // TODO: extract all POST requests into 1 function
+    // TODO: extract all GET requests into 1 function (or try and combine these?)
     public static void startProcess() throws IOException, InterruptedException {
         // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
         // Helpful: https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
@@ -259,16 +279,15 @@ public class App {
         API_KEY = dotenv.get("SANDBOX_API_KEY");
         SECRET_KEY = dotenv.get("SANDBOX_SECRET_KEY");
         PASSPHRASE = dotenv.get("SANDBOX_PASSPHRASE");
-        HttpClient client = HttpClient.newHttpClient();
+        client = HttpClient.newHttpClient(); // !!
 
-        // enter num coins you're watching
         Scanner sc = new Scanner(System.in);
         System.out.println("Number of coins to watch:");
         int numCoins = sc.nextInt();
         sc.nextLine();
         Coin[] coins = new Coin[numCoins];
         // TODO: also ask about risk tolerance here
-        for(int i = 0; i < numCoins; i++) {
+        for (int i = 0; i < numCoins; i++) {
             // BTC
             System.out.println("Coin ticker " + (i + 1) + ") ($):");
             String name = sc.nextLine();
@@ -286,11 +305,18 @@ public class App {
             sc.nextLine();
         }
 
+        long secondsInAWeek = 604800; // long MA
+        long secondsInADay = 86400; // short MA
+        double longMa = getMovingAverage("BTC-USD", secondsInAWeek);
+        double shortMa = getMovingAverage("BTC-USD", secondsInADay);
+        System.out.println(longMa);
+        System.out.println(shortMa);
+
         // TODO: finish this
         //  while(isRunning) {
-            // for each Coin
-                // analyze
-                // then shleep
+        // for each Coin
+        // analyze
+        // then shleep
         // }
 
         // TODO: for any function, if we get back any status code >= 300, set isRunning = false
