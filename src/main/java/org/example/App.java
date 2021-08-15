@@ -1,7 +1,5 @@
 package org.example;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -16,7 +14,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SignatureException;
 import java.time.Instant;
 import java.util.*;
 
@@ -36,7 +33,7 @@ public class App {
     private static String PASSPHRASE;
 
     static boolean isRunning = true;
-    static HttpClient client; // TODO: move this somewhere else idk
+    static HttpClient client;
 
     public static double calculateAverage(String responseBody) {
         JSONArray arr = new JSONArray(responseBody);
@@ -50,6 +47,34 @@ public class App {
             sum += low + (high - low) / 2;
         }
         return sum / n;
+    }
+
+    public static HttpResponse<String> makePOSTRequest(JSONObject requestBody, String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
+    }
+
+    public static HttpResponse<String> makeGETRequest(String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .GET()
+                .setHeader(CB_ACCESS_SIGN, SIGN)
+                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
+                .setHeader(CB_ACCESS_KEY, API_KEY)
+                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
+                .setHeader("content-type", "application/json")
+                .uri(URI.create(BASE_URL + REQUEST_PATH))
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return response;
     }
 
     // ref: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
@@ -71,7 +96,6 @@ public class App {
         }
     }
 
-    // TODO: add limit order?
     // https://docs.pro.coinbase.com/#place-a-new-order
     // requires "BTC-USD" format
     // action has to be buy or sell
@@ -86,20 +110,9 @@ public class App {
         String REQUEST_PATH = "/orders";
         String METHOD = "POST";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
-        HttpRequest request = HttpRequest.newBuilder()
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-                .setHeader(CB_ACCESS_SIGN, SIGN)
-                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-                .setHeader(CB_ACCESS_KEY, API_KEY)
-                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-                .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + REQUEST_PATH))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return response;
+        return makePOSTRequest(requestBody, SIGN, TIMESTAMP, REQUEST_PATH);
     }
 
-    // TODO: delete?
     // pass in coinbase pro wallet address of the corresponding cryptocurrency
     // requires "BTC" format
 //    public static HttpResponse<String> withdrawToWallet(String name, double amount, String walletId) throws IOException, InterruptedException {
@@ -111,23 +124,12 @@ public class App {
 //        String REQUEST_PATH = "/withdrawals/crypto";
 //        String METHOD = "POST";
 //        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
-//        HttpRequest request = HttpRequest.newBuilder()
-//                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-//                .setHeader(CB_ACCESS_SIGN, SIGN)
-//                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-//                .setHeader(CB_ACCESS_KEY, API_KEY)
-//                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-//                .setHeader("content-type", "application/json")
-//                .uri(URI.create(BASE_URL + REQUEST_PATH))
-//                .build();
-//        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-//        return response;
+//        return makePOSTRequest(requestBody, SIGN, TIMESTAMP, REQUEST_PATH);
 //    }
 
     // https://docs.pro.coinbase.com/#coinbase56
     // withdraws to a regular Coinbase account (not pro)
     // requires "BTC" format
-    // TODO: delete?
 //    public static HttpResponse<String> withdrawToCoinbase(String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
 //        JSONObject requestBody = new JSONObject();
 //        requestBody.put("amount", String.valueOf(amount));
@@ -137,20 +139,9 @@ public class App {
 //        String REQUEST_PATH = "/withdrawals/coinbase-account";
 //        String METHOD = "POST";
 //        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
-//        HttpRequest request = HttpRequest.newBuilder()
-//                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-//                .setHeader(CB_ACCESS_SIGN, SIGN)
-//                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-//                .setHeader(CB_ACCESS_KEY, API_KEY)
-//                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-//                .setHeader("content-type", "application/json")
-//                .uri(URI.create(BASE_URL + REQUEST_PATH))
-//                .build();
-//        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-//        return response;
+//        return makePOSTRequest(requestBody, SIGN, TIMESTAMP, REQUEST_PATH);
 //    }
 
-    // TODO: delete?
 //    public static HttpResponse<String> convert() throws IOException, InterruptedException {
 //        // https://docs.pro.coinbase.com/#create-conversion
 //        JSONObject requestBody = new JSONObject();
@@ -161,17 +152,7 @@ public class App {
 //        String REQUEST_PATH = "/conversions";
 //        String METHOD = "POST";
 //        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, requestBody.toString(), TIMESTAMP);
-//        HttpRequest request = HttpRequest.newBuilder()
-//                .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-//                .setHeader(CB_ACCESS_SIGN, SIGN)
-//                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-//                .setHeader(CB_ACCESS_KEY, API_KEY)
-//                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-//                .setHeader("content-type", "application/json")
-//                .uri(URI.create(BASE_URL + REQUEST_PATH))
-//                .build();
-//        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-//        return response;
+//        return makePOSTRequest(requestBody, SIGN, TIMESTAMP, REQUEST_PATH);
 //    }
 
     // requires "BTC-USD" format
@@ -186,44 +167,22 @@ public class App {
         String REQUEST_PATH = "/products/" + coinTicker + "/candles?start=" + MAStart + "&end=" + MAEnd + "&granularity=" + granularity;
         String METHOD = "GET";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .setHeader(CB_ACCESS_SIGN, SIGN)
-                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-                .setHeader(CB_ACCESS_KEY, API_KEY)
-                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-                .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + REQUEST_PATH))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = makeGETRequest(SIGN, TIMESTAMP, REQUEST_PATH);
         return calculateAverage(response.body());
     }
 
-    // TODO: delete
 //    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
 //        String TIMESTAMP = Instant.now().getEpochSecond() + "";
 //        String REQUEST_PATH = "/coinbase-accounts";
 //        String METHOD = "GET";
 //        String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
-//        HttpRequest request = HttpRequest.newBuilder()
-//                .GET()
-//                .setHeader(CB_ACCESS_SIGN, SIGN)
-//                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-//                .setHeader(CB_ACCESS_KEY, API_KEY)
-//                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-//                .setHeader("content-type", "application/json")
-//                .uri(URI.create(BASE_URL + REQUEST_PATH))
-//                .build();
-//        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-//        return response;
+//        return makeGETRequest(SIGN, TIMESTAMP, REQUEST_PATH);
 //    }
 
     // requires "BTC" format
     public static double getBalance(String name) throws IOException, InterruptedException {
         HttpResponse<String> responseBody = getAllAccounts();
         JSONArray arr = new JSONArray(responseBody);
-
         for(int i = 0; i < arr.length(); i++) {
             JSONObject curr = arr.getJSONObject(i);
             if(curr.get("currency").equals(name)) {
@@ -233,23 +192,13 @@ public class App {
         return -1.0;
     }
 
-    // response contains a bunch of accounts, 1 for each coin
+    // returns a JSON array of accounts, 1 for each coin
     public static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/accounts";
         String METHOD = "GET";
         String SIGN = generateSignedHeader(REQUEST_PATH, METHOD, "", TIMESTAMP);
-        HttpRequest request = HttpRequest.newBuilder()
-                .GET()
-                .setHeader(CB_ACCESS_SIGN, SIGN)
-                .setHeader(CB_ACCESS_TIMESTAMP, TIMESTAMP)
-                .setHeader(CB_ACCESS_KEY, API_KEY)
-                .setHeader(CB_ACCESS_PASSPHRASE, PASSPHRASE)
-                .setHeader("content-type", "application/json")
-                .uri(URI.create(BASE_URL + REQUEST_PATH))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return response;
+        return makeGETRequest(SIGN, TIMESTAMP, REQUEST_PATH);
     }
 
     // TODO: make this better
@@ -262,23 +211,12 @@ public class App {
         double longMa = getMovingAverage(coin.getProdId(), longMaSeconds);
         System.out.printf("[%s][7 DAY M.A.]: %.2f\n", coin.getProdId(), longMa);
         System.out.printf("[%s][1 DAY M.A.]: %.2f\n", coin.getProdId(), shortMa);
-        if(shortMa > longMa + coin.getDiffAmtRequired()) {
-            return BUY_ACTION;
-        } else if(shortMa + coin.getDiffAmtRequired() < longMa) {
-            return SELL_ACTION;
-        }
+        if(shortMa > longMa + coin.getDiffAmtRequired()) return BUY_ACTION;
+        else if(shortMa + coin.getDiffAmtRequired() < longMa) return SELL_ACTION;
         return NO_ACTION;
     }
 
-    // TODO: extract all POST requests into 1 function
-    // TODO: extract all GET requests into 1 function (or try and combine these?)
     public static void startProcess() throws IOException, InterruptedException {
-        // Helpful: https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
-        // https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
-        // https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
-        // https://github.com/cdimascio/dotenv-java
-        // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
-
         Dotenv dotenv = Dotenv.load();
         // BASE_URL = dotenv.get("BASE_URL");
         // API_KEY = dotenv.get("API_KEY");
@@ -318,9 +256,9 @@ public class App {
             sc.nextLine();
         }
 
-        long secondsInADay = 86400; // short MA
-        long secondsInAWeek = 604800; // long MA
-        // withdraw coin was the only one that used BTC instead of BTC-USD but can delete that now
+        long secondsInADay = 86400;
+        long secondsInAWeek = 604800;
+        // withdraw coin was the only one that used BTC instead of BTC-USD but can delete that now?
 
         // this converts to USD, not USDC
         // HttpResponse<String> res = placeOrder("BTC-USD", 0.1, "sell");
@@ -348,13 +286,19 @@ public class App {
 
             try {
                 System.out.println("[...SLEEP...]");
-                Thread.sleep(60000); // milliseconds
+                Thread.sleep(60000);
             } catch(InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
     }
 
+    // Helpful:
+    // https://stackoverflow.com/questions/61281364/coinbase-pro-sandbox-how-to-deposit-test-money
+    // https://stackoverflow.com/questions/59364615/coinbase-pro-and-sandbox-login-endpoints
+    // https://stackoverflow.com/questions/63243193/has-intellij-idea2020-1-removed-maven-auto-import-dependencies
+    // https://github.com/cdimascio/dotenv-java
+    // https://www.youtube.com/watch?v=qzRKa8I36Ww&ab_channel=CodingMaster-ProgrammingTutorials
     public static void main(String[] args) throws IOException, InterruptedException {
         startProcess();
     }
