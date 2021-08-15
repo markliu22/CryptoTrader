@@ -35,7 +35,8 @@ public class App {
     static boolean isRunning = true;
     static HttpClient client;
 
-    public static double calculateAverage(String responseBody) {
+    // TODO: make all these internal function private
+    private static double calculateAverage(String responseBody) {
         JSONArray arr = new JSONArray(responseBody);
         double sum = 0;
         int n = arr.length();
@@ -49,7 +50,7 @@ public class App {
         return sum / n;
     }
 
-    public static HttpResponse<String> makePOSTRequest(JSONObject requestBody, String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
+    private static HttpResponse<String> makePOSTRequest(JSONObject requestBody, String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
                 .setHeader(CB_ACCESS_SIGN, SIGN)
@@ -63,7 +64,7 @@ public class App {
         return response;
     }
 
-    public static HttpResponse<String> makeGETRequest(String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
+    private static HttpResponse<String> makeGETRequest(String SIGN, String TIMESTAMP, String REQUEST_PATH) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .GET()
                 .setHeader(CB_ACCESS_SIGN, SIGN)
@@ -78,7 +79,7 @@ public class App {
     }
 
     // ref: https://stackoverflow.com/questions/49679288/gdax-api-returning-invalid-signature-on-post-requests
-    public static String generateSignedHeader(String requestPath, String method, String body, String timestamp) {
+    private static String generateSignedHeader(String requestPath, String method, String body, String timestamp) {
         try {
             String prehash = timestamp + method.toUpperCase() + requestPath + body;
             byte[] secretDecoded = Base64.getDecoder().decode(SECRET_KEY);
@@ -99,7 +100,7 @@ public class App {
     // https://docs.pro.coinbase.com/#place-a-new-order
     // requires "BTC-USD" format
     // action has to be buy or sell
-    public static HttpResponse<String> placeOrder(String name, double amount, String action) throws IOException, InterruptedException {
+    private static HttpResponse<String> placeOrder(String name, double amount, String action) throws IOException, InterruptedException {
         // TODO: add check that they have enough in their account
         JSONObject requestBody = new JSONObject();
         requestBody.put("size", String.valueOf(amount)); // place market order for amount BTC
@@ -115,7 +116,7 @@ public class App {
 
     // pass in coinbase pro wallet address of the corresponding cryptocurrency
     // requires "BTC" format
-//    public static HttpResponse<String> withdrawToWallet(String name, double amount, String walletId) throws IOException, InterruptedException {
+//    private static HttpResponse<String> withdrawToWallet(String name, double amount, String walletId) throws IOException, InterruptedException {
 //        JSONObject requestBody = new JSONObject();
 //        requestBody.put("amount", String.valueOf(amount));
 //        requestBody.put("currency", name);
@@ -130,7 +131,7 @@ public class App {
     // https://docs.pro.coinbase.com/#coinbase56
     // withdraws to a regular Coinbase account (not pro)
     // requires "BTC" format
-//    public static HttpResponse<String> withdrawToCoinbase(String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
+//    private static HttpResponse<String> withdrawToCoinbase(String name, double amount, String coinbaseAccId) throws IOException, InterruptedException {
 //        JSONObject requestBody = new JSONObject();
 //        requestBody.put("amount", String.valueOf(amount));
 //        requestBody.put("currency", name);
@@ -142,7 +143,7 @@ public class App {
 //        return makePOSTRequest(requestBody, SIGN, TIMESTAMP, REQUEST_PATH);
 //    }
 
-//    public static HttpResponse<String> convert() throws IOException, InterruptedException {
+//    private static HttpResponse<String> convert() throws IOException, InterruptedException {
 //        // https://docs.pro.coinbase.com/#create-conversion
 //        JSONObject requestBody = new JSONObject();
 //        requestBody.put("from", "USD");
@@ -156,7 +157,7 @@ public class App {
 //    }
 
     // requires "BTC-USD" format
-    public static double getMovingAverage(String coinTicker, long maSeconds) throws IOException, InterruptedException {
+    private static double getMovingAverage(String coinTicker, long maSeconds) throws IOException, InterruptedException {
         int granularity = 86400; // since we only get MA from past day and past week, keep this
         // smaller intervals need smaller granularity or else gives error
 
@@ -171,7 +172,7 @@ public class App {
         return calculateAverage(response.body());
     }
 
-//    public static HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
+//    public private HttpResponse<String> getCoinbaseAccounts() throws IOException, InterruptedException {
 //        String TIMESTAMP = Instant.now().getEpochSecond() + "";
 //        String REQUEST_PATH = "/coinbase-accounts";
 //        String METHOD = "GET";
@@ -180,7 +181,7 @@ public class App {
 //    }
 
     // requires "BTC" format
-    public static double getBalance(String name) throws IOException, InterruptedException {
+    private static double getBalance(String name) throws IOException, InterruptedException {
         HttpResponse<String> responseBody = getAllAccounts();
         JSONArray arr = new JSONArray(responseBody);
         for(int i = 0; i < arr.length(); i++) {
@@ -193,7 +194,7 @@ public class App {
     }
 
     // returns a JSON array of accounts, 1 for each coin
-    public static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
+    private static HttpResponse<String> getAllAccounts() throws IOException, InterruptedException {
         String TIMESTAMP = Instant.now().getEpochSecond() + "";
         String REQUEST_PATH = "/accounts";
         String METHOD = "GET";
@@ -206,7 +207,7 @@ public class App {
     * Other exit methods could be when the price crosses below a moving average (not shown), or when an indicator such as the stochastic oscillator crosses its signal line.
     * https://www.investopedia.com/terms/s/stochasticoscillator.asp
     * */
-    public static String getAction(Coin coin, long shortMaSeconds, long longMaSeconds) throws IOException, InterruptedException {
+    private static String getAction(Coin coin, long shortMaSeconds, long longMaSeconds) throws IOException, InterruptedException {
         double shortMa = getMovingAverage(coin.getProdId(), shortMaSeconds);
         double longMa = getMovingAverage(coin.getProdId(), longMaSeconds);
         System.out.printf("[%s][7 DAY M.A.]: %.2f\n", coin.getProdId(), longMa);
@@ -216,7 +217,7 @@ public class App {
         return NO_ACTION;
     }
 
-    public static void startProcess() throws IOException, InterruptedException {
+    private static void startProcess() throws IOException, InterruptedException {
         Dotenv dotenv = Dotenv.load();
         // BASE_URL = dotenv.get("BASE_URL");
         // API_KEY = dotenv.get("API_KEY");
